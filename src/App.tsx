@@ -67,6 +67,7 @@ interface BlockedApp {
 
 interface AdminConfig {
   telegramChatId: string;
+  telegramBotToken?: string;
   notificationsEnabled: boolean;
 }
 
@@ -118,7 +119,7 @@ export default function App() {
   
   const [logs, setLogs] = useState<AppLog[]>([]);
   const [blockedApps, setBlockedApps] = useState<BlockedApp[]>([]);
-  const [config, setConfig] = useState<AdminConfig>({ telegramChatId: '', notificationsEnabled: true });
+  const [config, setConfig] = useState<AdminConfig>({ telegramChatId: '', telegramBotToken: '', notificationsEnabled: true });
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
   const [isLiveTracking, setIsLiveTracking] = useState(false);
@@ -333,6 +334,16 @@ export default function App() {
       alert("يرجى إدخال Chat ID أولاً");
       return;
     }
+    
+    // If token is provided in UI but not yet activated on server, we should try to activate it first
+    if (config.telegramBotToken) {
+      await fetch('/api/config/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: config.telegramBotToken })
+      });
+    }
+
     try {
       const res = await fetch('/api/notify', {
         method: 'POST',
@@ -641,6 +652,33 @@ export default function App() {
               
               <Card className="p-6 space-y-6">
                 <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-sm font-bold text-slate-700 mb-2 block">توكن بوت تيليجرام (Bot Token)</span>
+                    <div className="flex gap-2">
+                      <input 
+                        type="password" 
+                        value={config.telegramBotToken || ''}
+                        onChange={(e) => updateConfig({ telegramBotToken: e.target.value })}
+                        placeholder="أدخل Token البوت الخاص بك"
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                      <Button onClick={async () => {
+                        if (!config.telegramBotToken) return alert("يرجى إدخال التوكن");
+                        const res = await fetch('/api/config/bot', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ token: config.telegramBotToken })
+                        });
+                        const data = await res.json();
+                        if (data.success) alert("تم تفعيل البوت بنجاح!");
+                        else alert("فشل التفعيل: " + data.error);
+                      }} variant="secondary">
+                        تفعيل البوت
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">يمكنك الحصول عليه من @BotFather</p>
+                  </label>
+
                   <label className="block">
                     <span className="text-sm font-bold text-slate-700 mb-2 flex items-center justify-between">
                       معرف دردشة تيليجرام (Chat ID)
