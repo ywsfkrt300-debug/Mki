@@ -40,7 +40,11 @@ if (token) {
 async function startServer() {
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", botActive: !!bot });
+    res.json({ 
+      status: "ok", 
+      botActive: !!bot,
+      hasToken: !!process.env.TELEGRAM_BOT_TOKEN 
+    });
   });
 
   // Proxy Telegram notifications from Frontend to Telegram
