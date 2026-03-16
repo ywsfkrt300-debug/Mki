@@ -62,9 +62,10 @@ if (currentToken) {
   const fetchTokenFromFirestore = async () => {
     try {
       if (!firebaseConfig) return;
-      const db = firebaseConfig.firestoreDatabaseId 
-        ? admin.firestore(firebaseConfig.firestoreDatabaseId) 
-        : admin.firestore();
+      
+      // Correct way to get a named database in firebase-admin
+      const { getFirestore } = await import('firebase-admin/firestore');
+      const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || '(default)');
       
       const doc = await db.collection('config').doc('admin').get();
       if (doc.exists) {
@@ -142,9 +143,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV === "production" && !process.env.VITE) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;

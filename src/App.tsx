@@ -664,14 +664,25 @@ export default function App() {
                       />
                       <Button onClick={async () => {
                         if (!config.telegramBotToken) return alert("يرجى إدخال التوكن");
-                        const res = await fetch('/api/config/bot', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ token: config.telegramBotToken })
-                        });
-                        const data = await res.json();
-                        if (data.success) alert("تم تفعيل البوت بنجاح!");
-                        else alert("فشل التفعيل: " + data.error);
+                        try {
+                          const res = await fetch('/api/config/bot', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: config.telegramBotToken })
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            alert("✅ تم تفعيل البوت بنجاح! يمكنك الآن تجربة إرسال رسالة اختبار.");
+                            // Refresh status
+                            const healthRes = await fetch('/api/health');
+                            const healthData = await healthRes.json();
+                            setBotStatus({ active: healthData.botActive, hasToken: healthData.hasToken });
+                          } else {
+                            alert("❌ فشل التفعيل: " + (data.error || "خطأ غير معروف"));
+                          }
+                        } catch (e) {
+                          alert("❌ خطأ في الاتصال بالخادم. إذا كنت تستخدم Vercel، فقد يكون الخادم غير مدعوم بشكل كامل. يرجى استخدام رابط المنصة الرسمي.");
+                        }
                       }} variant="secondary">
                         تفعيل البوت
                       </Button>
