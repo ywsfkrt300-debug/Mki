@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "AppLog": {
+      "title": "سجل استخدام التطبيقات",
+      "description": "سجل يحتوي على تفاصيل دخول وخروج المستخدم من التطبيقات",
+      "type": "object",
+      "properties": {
+        "appName": { "type": "string", "description": "اسم التطبيق" },
+        "packageName": { "type": "string", "description": "معرف الحزمة (Package Name)" },
+        "startTime": { "type": "string", "format": "date-time", "description": "وقت الدخول" },
+        "endTime": { "type": "string", "format": "date-time", "description": "وقت الخروج" },
+        "duration": { "type": "number", "description": "مدة البقاء بالثواني" },
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "حالة الجلسة" }
+      },
+      "required": ["appName", "packageName", "startTime", "status"]
+    },
+    "BlockedApp": {
+      "title": "التطبيقات المحظورة",
+      "description": "قائمة بالتطبيقات التي يمنع المستخدم من دخولها",
+      "type": "object",
+      "properties": {
+        "packageName": { "type": "string", "description": "معرف الحزمة المحظور" },
+        "appName": { "type": "string", "description": "اسم التطبيق المحظور" },
+        "blockedAt": { "type": "string", "format": "date-time", "description": "وقت الحظر" }
+      },
+      "required": ["packageName", "appName"]
+    },
+    "AdminConfig": {
+      "title": "إعدادات المشرف",
+      "description": "إعدادات النظام وتكامل تيليجرام",
+      "type": "object",
+      "properties": {
+        "telegramChatId": { "type": "string", "description": "معرف دردشة المشرف في تيليجرام" },
+        "notificationsEnabled": { "type": "boolean", "description": "تفعيل الإشعارات" }
+      }
+    }
+  },
+  "firestore": {
+    "app_logs": {
+      "schema": "AppLog",
+      "description": "سجلات استخدام التطبيقات"
+    },
+    "blocked_apps": {
+      "schema": "BlockedApp",
+      "description": "قائمة الحظر"
+    },
+    "config": {
+      "schema": "AdminConfig",
+      "description": "إعدادات النظام"
+    }
+  }
+}

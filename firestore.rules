@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: app_logs
+    // Fields: appName (string), packageName (string), startTime (timestamp), endTime (timestamp), duration (number), status (string)
+    //
+    // Collection: blocked_apps
+    // Fields: packageName (string), appName (string), blockedAt (timestamp)
+    //
+    // Collection: config
+    // Fields: telegramChatId (string), notificationsEnabled (bool)
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Allow public access for this specific app requirement
+    match /{path=**} {
+      allow read, write: if true;
+    }
+
+    // Validation for app_logs
+    match /app_logs/{logId} {
+      function isValidLog(data) {
+        return data.appName is string && data.appName.size() < 100 &&
+               data.packageName is string && data.packageName.size() < 200 &&
+               data.status in ['active', 'completed'];
+      }
+      allow create, update: if isValidLog(request.resource.data);
+    }
+
+    // Validation for blocked_apps
+    match /blocked_apps/{appId} {
+      function isValidBlockedApp(data) {
+        return data.packageName is string && data.packageName.size() < 200 &&
+               data.appName is string && data.appName.size() < 100;
+      }
+      allow create, update: if isValidBlockedApp(request.resource.data);
+    }
+    
+    // Validation for config
+    match /config/{configId} {
+      allow read, write: if true;
+    }
+  }
+}
