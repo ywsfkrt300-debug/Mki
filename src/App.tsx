@@ -32,7 +32,8 @@ import {
   XCircle,
   Plus,
   Trash2,
-  Send
+  Send,
+  MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -53,6 +54,8 @@ interface AppLog {
   endTime?: Timestamp;
   duration?: number;
   status: 'active' | 'completed';
+  latitude?: number;
+  longitude?: number;
 }
 
 interface BlockedApp {
@@ -117,13 +120,57 @@ export default function App() {
   const [blockedApps, setBlockedApps] = useState<BlockedApp[]>([]);
   const [config, setConfig] = useState<AdminConfig>({ telegramChatId: '', notificationsEnabled: true });
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
+  const [isLiveTracking, setIsLiveTracking] = useState(false);
+  const [lastSentLocation, setLastSentLocation] = useState<string | null>(null);
 
-  // Check notification permission on load
+  // Send location to Telegram every 10s if tracking is on
+  useEffect(() => {
+    if (!isLiveTracking || !config.telegramChatId || logs.length === 0) return;
+
+    const latestLog = logs[0];
+    if (latestLog.latitude && latestLog.longitude) {
+      const locKey = `${latestLog.latitude},${latestLog.longitude}`;
+      
+      if (locKey !== lastSentLocation) {
+        fetch('/api/location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId: config.telegramChatId,
+            latitude: latestLog.latitude,
+            longitude: latestLog.longitude,
+            appName: latestLog.appName
+          })
+        });
+        setLastSentLocation(locKey);
+      }
+    }
+  }, [logs, isLiveTracking, config.telegramChatId, lastSentLocation]);
+
+  // Check permissions on load
   useEffect(() => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
+      if (Notification.permission === 'default') {
+        requestNotificationPermission();
+      }
+    }
+
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' as any }).then((result) => {
+        setLocationPermission(result.state);
+        result.onchange = () => setLocationPermission(result.state);
+      });
     }
   }, []);
+
+  const requestLocationPermission = () => {
+    navigator.geolocation.getCurrentPosition(
+      () => setLocationPermission('granted'),
+      () => setLocationPermission('denied')
+    );
+  };
 
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
@@ -357,6 +404,37 @@ export default function App() {
                 </Card>
               </div>
 
+              {/* Live Tracking Toggle */}
+              <Card className={cn(
+                "p-4 flex items-center justify-between transition-all",
+                isLiveTracking ? "bg-emerald-50 border-emerald-200" : "bg-slate-50"
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                    isLiveTracking ? "bg-emerald-500 text-white animate-pulse" : "bg-slate-200 text-slate-500"
+                  )}>
+                    <Send className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">البث المباشر للموقع إلى تيليجرام</p>
+                    <p className="text-xs text-slate-500">إرسال تحديثات الموقع كل 10 ثوانٍ عند توفرها</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsLiveTracking(!isLiveTracking)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors outline-none",
+                    isLiveTracking ? "bg-emerald-500" : "bg-slate-300"
+                  )}
+                >
+                  <span className={cn(
+                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                    isLiveTracking ? "translate-x-6" : "translate-x-1"
+                  )} />
+                </button>
+              </Card>
+
               {/* Active Apps */}
               <section>
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -371,7 +449,18 @@ export default function App() {
                           <Smartphone className="text-slate-400" />
                         </div>
                         <div className="flex-1">
-                          <div className="font-bold">{log.appName}</div>
+                          <div className="font-bold flex items-center gap-2">
+                            {log.appName}
+                            {log.latitude && (
+                              <button 
+                                onClick={() => window.open(`https://www.google.com/maps?q=${log.latitude},${log.longitude}`, '_blank')}
+                                className="text-emerald-500 hover:text-emerald-600"
+                                title="عرض الموقع"
+                              >
+                                <MapPin className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                           <div className="text-xs text-slate-400">{log.packageName}</div>
                         </div>
                         <div className="text-right">
@@ -416,7 +505,18 @@ export default function App() {
                       {completedLogs.map(log => (
                         <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                           <td className="p-4">
-                            <div className="font-medium">{log.appName}</div>
+                            <div className="font-medium flex items-center gap-2">
+                              {log.appName}
+                              {log.latitude && (
+                                <button 
+                                  onClick={() => window.open(`https://www.google.com/maps?q=${log.latitude},${log.longitude}`, '_blank')}
+                                  className="text-emerald-500 hover:text-emerald-600"
+                                  title="عرض الموقع"
+                                  >
+                                  <MapPin className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                             <div className="text-xs text-slate-400">{log.packageName}</div>
                           </td>
                           <td className="p-4 text-sm text-slate-600">
@@ -515,6 +615,46 @@ export default function App() {
                     <p className="text-xs text-slate-400 mt-2">استخدم بوت @userinfobot للحصول على معرفك الخاص.</p>
                   </label>
 
+                  <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                        <Bell className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">إشعارات المتصفح</p>
+                        <p className="text-xs text-slate-500">تفعيل التنبيهات المباشرة على هذا الجهاز</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant={notificationPermission === 'granted' ? 'secondary' : 'primary'}
+                      onClick={requestNotificationPermission}
+                      disabled={notificationPermission === 'granted'}
+                      className="px-6"
+                    >
+                      {notificationPermission === 'granted' ? 'مفعلة ✅' : 'تفعيل الآن'}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                        <MapPin className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">تتبع الموقع (GPS)</p>
+                        <p className="text-xs text-slate-500">السماح للتطبيق بالوصول للموقع الجغرافي</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant={locationPermission === 'granted' ? 'secondary' : 'primary'}
+                      onClick={requestLocationPermission}
+                      disabled={locationPermission === 'granted'}
+                      className="px-6"
+                    >
+                      {locationPermission === 'granted' ? 'مفعلة ✅' : 'تفعيل الآن'}
+                    </Button>
+                  </div>
+
                   <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                     <div className="flex items-center gap-3">
                       <Bell className="text-indigo-600" />
@@ -543,15 +683,18 @@ export default function App() {
                       <span className="text-xs font-bold text-indigo-600 uppercase">1. الصلاحيات المطلوبة (AndroidManifest.xml):</span>
                       <pre className="bg-slate-900 text-slate-300 p-4 rounded-xl text-xs font-mono overflow-x-auto">
 {`<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
-<uses-permission android:name="android.permission.INTERNET" />`}
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />`}
                       </pre>
                     </div>
 
                     <div className="space-y-2">
-                      <span className="text-xs font-bold text-indigo-600 uppercase">2. كود مراقبة التطبيقات (Kotlin):</span>
+                      <span className="text-xs font-bold text-indigo-600 uppercase">2. كود مراقبة التطبيقات والموقع (Kotlin):</span>
                       <div className="bg-slate-900 text-slate-300 p-4 rounded-xl text-xs font-mono overflow-x-auto max-h-96 overflow-y-auto">
                         <pre>
-{`// دالة للتحقق من التطبيق الحالي وإرساله لفايربيس
+{`// دالة للتحقق من التطبيق الحالي وإرساله لفايربيس مع الموقع
+// استدعِ هذه الدالة كل 10 ثوانٍ باستخدام Timer أو WorkManager
 fun monitorUsage(context: Context) {
     val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     val time = System.currentTimeMillis()
@@ -562,31 +705,33 @@ fun monitorUsage(context: Context) {
         if (sortedStats.isNotEmpty()) {
             val topApp = sortedStats[0].packageName
             
-            // 1. إرسال سجل النشاط
+            // الحصول على الموقع
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+
+            // إرسال سجل النشاط مع الموقع كل 10 ثوانٍ
             val log = hashMapOf(
                 "appName" to getAppName(context, topApp),
                 "packageName" to topApp,
                 "startTime" to FieldValue.serverTimestamp(),
-                "status" to "active"
+                "status" to "active",
+                "latitude" to lastLocation?.latitude,
+                "longitude" to lastLocation?.longitude
             )
             FirebaseFirestore.getInstance().collection("app_logs").add(log)
             
-            // 2. التحقق من الحظر
-            FirebaseFirestore.getInstance().collection("blocked_apps")
-                .whereEqualTo("packageName", topApp)
-                .get()
-                .addOnSuccessListener { documents ->
-                    if (!documents.isEmpty) {
-                        // إذا كان التطبيق محظوراً، نعود للشاشة الرئيسية
-                        val startMain = Intent(Intent.ACTION_MAIN)
-                        startMain.addCategory(Intent.CATEGORY_HOME)
-                        startMain.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(startMain)
-                    }
-                }
+            // التحقق من الحظر...
         }
     }
-}`}
+}
+
+// مثال لتشغيل المؤقت كل 10 ثوانٍ:
+val timer = Timer()
+timer.scheduleAtFixedRate(object : TimerTask() {
+    override fun run() {
+        monitorUsage(context)
+    }
+}, 0, 10000) // 10000ms = 10 seconds`}
                         </pre>
                       </div>
                     </div>

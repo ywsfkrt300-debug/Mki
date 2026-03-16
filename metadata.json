@@ -1,5 +1,5 @@
 {
   "name": "مراقب التطبيقات الذكي",
   "description": "نظام متكامل لتتبع استخدام تطبيقات الأندرويد مع إشعارات تيليجرام ولوحة تحكم للمشرف.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["notifications", "geolocation"]
 }

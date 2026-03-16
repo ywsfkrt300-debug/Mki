@@ -10,7 +10,9 @@
         "startTime": { "type": "string", "format": "date-time", "description": "وقت الدخول" },
         "endTime": { "type": "string", "format": "date-time", "description": "وقت الخروج" },
         "duration": { "type": "number", "description": "مدة البقاء بالثواني" },
-        "status": { "type": "string", "enum": ["active", "completed"], "description": "حالة الجلسة" }
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "حالة الجلسة" },
+        "latitude": { "type": "number", "description": "خط العرض" },
+        "longitude": { "type": "number", "description": "خط الطول" }
       },
       "required": ["appName", "packageName", "startTime", "status"]
     },
